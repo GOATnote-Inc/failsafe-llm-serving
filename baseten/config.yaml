@@ -1,0 +1,79 @@
+# Truss config for a single PRIMARY specialist replica (e.g. a fine-tuned ~30B
+# model) in a medical-RAG conductor->specialist ensemble. Field names verified against
+# docs.baseten.co as of 2026-05-28. The comments call out which knobs are
+# load-bearing for failing safe under saturation — they map 1:1 to the simulator
+# in ../sim and the rationale in ../DESIGN.md / ../BASETEN_MAPPING.md.
+
+model_name: specialist-cardiology
+model_class_name: Model          # ../baseten/model.py
+
+resources:
+  accelerator: H100              # one GPU; KV cache is the real concurrency limit
+  cpu: "4"
+  memory: 32Gi
+  use_gpu: true
+
+runtime:
+  # ============================================================================
+  # THE fail-safe knob. predict_concurrency is the per-replica admission ceiling
+  # (requests allowed inside predict() at once). Set it to the *latency knee*
+  # measured by load test — the largest batch where p95 TTFT/ITL stay within SLO
+  # and KV utilization stays < ~85% — NOT to max throughput. Capping here means a
+  # replica physically cannot be pushed onto the recompute-preemption "cliff":
+  # we never admit enough work to fill KV past the knee. Fail-safe by construction.
+  # ============================================================================
+  predict_concurrency: 12
+  streaming_read_timeout: 60      # SSE token-stream idle timeout (s)
+  transport:
+    kind: http
+  health_checks:
+    # If a replica wedges, stop sending it traffic quickly so the router can
+    # route around it (circuit-breaker cooperation) instead of piling on.
+    startup_threshold_seconds: 600
+    restart_threshold_seconds: 120
+    stop_traffic_threshold_seconds: 60
+
+# TensorRT-LLM engine: paged KV + chunked prefill + prefix reuse are what make
+# the long shared RAG prefixes cheap, which moves the latency knee outward.
+trt_llm:
+  build:
+    max_seq_len: 32768
+    max_batch_size: 16            # >= predict_concurrency; KV will bind first anyway
+    max_num_tokens: 16384
+    quantization_type: fp8_kv     # FP8 weights + FP8 KV cache -> ~2x more KV headroom
+  runtime:
+    # Leave headroom below 1.0 so a burst has somewhere to go before preemption.
+    kv_cache_free_gpu_mem_fraction: 0.85
+    enable_chunked_context: true  # Sarathi-style chunked prefill: long prompts don't
+                                  # monopolize a step and spike everyone else's ITL
+    kv_cache_host_memory_bytes: 34359738368   # 32 GiB host KV offload (spillover, not recompute)
+  plugin_configuration:
+    paged_kv_cache: true
+    use_paged_context_fmha: true  # enables prefix-cache reuse of shared context
+  # Optional: speculative decoding to cut ITL further once the above is stable.
+  # speculator:
+  #   speculative_decoding_mode: LOOKAHEAD_DECODING
+  #   lookahead_windows_size: 4
+  #   lookahead_ngram_size: 3
+  #   lookahead_verification_set_size: 4
+
+model_metadata:
+  # Makes the deployment OpenAI-compatible (streaming ChatCompletions + SSE).
+  openai_compatible: true
+
+# ---------------------------------------------------------------------------
+# Autoscaling (set here, in the UI, or via the autoscaling_settings API).
+# Autoscaling is the SLOW background fix: the autoscaler only re-evaluates once
+# per `autoscaling_window`, then a large model can take MINUTES to cold-start.
+# It cannot catch a burst on its own — the router's admission control + fallback
+# ladder bridge that gap. See DESIGN.md "Why autoscaling is necessary but not
+# sufficient".
+# ---------------------------------------------------------------------------
+autoscaling:
+  min_replica: 2                  # NEVER scale-to-zero on the interactive path:
+                                  # keeps replicas + hot prefixes warm (no cold start)
+  max_replica: 12
+  concurrency_target: 10          # autoscale trigger; keep <= predict_concurrency
+  target_utilization_percentage: 70   # scale out at 70% of target -> burst headroom
+  autoscaling_window: 60          # seconds of load averaged per scaling decision
+  scale_down_delay: 900           # slow, asymmetric scale-down: avoid flapping

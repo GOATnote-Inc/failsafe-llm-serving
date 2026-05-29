@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.DS_Store
+# Personal interview prep — kept local, intentionally NOT in the public repo.
+INTERVIEW_CHEATSHEET.md
+# NOTE: plots/*.svg are intentionally committed so the README renders on GitHub.
