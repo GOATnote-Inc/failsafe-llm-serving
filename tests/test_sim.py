@@ -68,6 +68,42 @@ def test_ladder_degrades_quality_not_safety():
     assert heavy["failure_pct"] < 3, heavy["failure_pct"]
 
 
+def test_readme_headline_numbers():
+    """Golden numbers: pin the exact figures published in the README tables to the
+    simulator output. The sim is seeded-deterministic (test_deterministic), so at
+    the README's quoted precision these must match exactly — any config or code
+    change that moves a published number fails here first."""
+    fs = run(SimConfig())
+    nv = run(naive_config(SimConfig()))
+    fss, nvs = fs.summary(), nv.summary()
+    # "through a 5x burst" table
+    assert round(fss["served_safe_pct"], 1) == 99.9, fss["served_safe_pct"]
+    assert round(nvs["served_safe_pct"], 1) == 6.5, nvs["served_safe_pct"]
+    assert round(fss["goodput_pct"], 1) == 76.7, fss["goodput_pct"]
+    assert round(nvs["goodput_pct"], 1) == 4.8, nvs["goodput_pct"]
+    assert round(fss["failure_pct"], 1) == 0.1, fss["failure_pct"]
+    assert round(nvs["failure_pct"], 1) == 93.5, nvs["failure_pct"]
+    assert fss["preemptions"] == 0, fss["preemptions"]
+    assert nvs["preemptions"] == 2_948_976, nvs["preemptions"]
+    assert fss["retries"] == 0, fss["retries"]
+    assert nvs["retries"] == 2_011, nvs["retries"]
+    # "p95 TTFT — calm / recovery" row
+    fw, nw = fs.window_summary(), nv.window_summary()
+    assert round(fw["calm"]["ttft_p95_ms"]) == 187, fw["calm"]
+    assert round(fw["recovery"]["ttft_p95_ms"]) == 215, fw["recovery"]
+    assert round(nw["calm"]["ttft_p95_ms"]) == 6_995, nw["calm"]
+    assert round(nw["recovery"]["ttft_p95_ms"]) == 9_710, nw["recovery"]
+    # "The prefix-cache lever" table
+    on = run(SimConfig(spike_multiplier=1.0, use_prefix_affinity=True)).summary()
+    off = run(SimConfig(spike_multiplier=1.0, use_prefix_affinity=False)).summary()
+    assert round(on["prefix_cache_hit_pct"], 1) == 90.3, on["prefix_cache_hit_pct"]
+    assert round(off["prefix_cache_hit_pct"], 1) == 66.8, off["prefix_cache_hit_pct"]
+    assert round(on["ttft_p50_ms"]) == 22, on["ttft_p50_ms"]
+    assert round(off["ttft_p50_ms"]) == 29, off["ttft_p50_ms"]
+    assert round(on["goodput_pct"], 1) == 91.2, on["goodput_pct"]
+    assert round(off["goodput_pct"], 1) == 74.4, off["goodput_pct"]
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0
