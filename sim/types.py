@@ -2,7 +2,7 @@
 
 Kept dependency-free (standard library only) so the whole project runs with a
 bare Python interpreter — no numpy, no pip install. That portability is a
-deliberate design choice: an interview reviewer should be able to clone and run
+deliberate design choice: a reviewer should be able to clone and run
 `make` with zero setup.
 """
 from __future__ import annotations

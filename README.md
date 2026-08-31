@@ -1,5 +1,7 @@
 # Fail-safe, low-latency LLM serving — a reliability engineering study
 
+*Independent engineering design study written as part of a job application; not affiliated with or endorsed by Baseten.*
+
 **A reliable, low-latency inference-backed query path that fails *safe* when a GPU
 node saturates its KV cache.** It models a high-traffic medical-RAG workload (long
 shared retrieval prefixes, a conductor→specialist ensemble, a ~160 ms responsiveness
@@ -192,3 +194,7 @@ because the failure mode is instructive.
 *A reliability-engineering study of fail-safe LLM serving. The workload is modeled
 on publicly-described large-scale medical-AI systems; all external claims are cited
 in [DESIGN.md](DESIGN.md) and [BASETEN_MAPPING.md](BASETEN_MAPPING.md).*
+
+## License
+
+Apache-2.0 — see [LICENSE](LICENSE).
