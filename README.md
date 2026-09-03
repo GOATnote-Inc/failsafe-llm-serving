@@ -1,5 +1,8 @@
 # Fail-safe, low-latency LLM serving — a reliability engineering study
 
+
+> **Maintenance status (2026-09):** passive. This repository is kept available as a reference implementation; CI runs on pushes and pull requests only, Dependabot security alerts remain enabled, and no scheduled jobs or hosted services consume ongoing resources. No active development is planned.
+
 *Independent engineering design study written as part of a job application; not affiliated with or endorsed by Baseten.*
 
 **A reliable, low-latency inference-backed query path that fails *safe* when a GPU
